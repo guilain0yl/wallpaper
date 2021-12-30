@@ -4,6 +4,7 @@ static IGraphBuilder* m_pGraph;
 static IMediaControl* m_pControl;
 static IMediaEventEx* m_pEvent;
 static IVMRWindowlessControl9* m_pWindowless;
+static IBasicAudio* m_pAudio;
 
 static void TearDownGraph();
 static HRESULT InitializeGraph(HWND hwnd);
@@ -77,17 +78,22 @@ HRESULT repaint(HWND hwnd, HDC hdc)
 
 HRESULT play()
 {
-	return  m_pControl->lpVtbl->Run(m_pControl);
+	return m_pControl->lpVtbl->Run(m_pControl);
+}
+
+HRESULT set_volume(long volume)
+{
+	return m_pAudio->lpVtbl->put_Volume(m_pAudio, volume);
 }
 
 HRESULT pause()
 {
-	return  m_pControl->lpVtbl->Pause(m_pControl);
+	return m_pControl->lpVtbl->Pause(m_pControl);
 }
 
 HRESULT stop()
 {
-	return  m_pControl->lpVtbl->Stop(m_pControl);
+	return m_pControl->lpVtbl->Stop(m_pControl);
 }
 
 HRESULT HandleGraphEvent(GraphEventFN pfnOnGraphEvent, HWND hwnd)
@@ -380,7 +386,6 @@ static HRESULT RenderStreams(IBaseFilter* pSource, HWND hwnd)
 	if (FAILED(hr))
 		goto done;
 
-	// Remove the audio renderer, if not used.
 	BOOL bRemoved;
 	hr = RemoveUnconnectedRenderer(m_pGraph, pAudioRenderer, &bRemoved);
 
@@ -420,6 +425,10 @@ static HRESULT InitializeGraph(HWND hwnd)
 	if (FAILED(hr))
 		goto done;
 
+	hr = m_pGraph->lpVtbl->QueryInterface(m_pGraph, &IID_IBasicAudio, (void**)&m_pAudio);
+	if (FAILED(hr))
+		goto done;
+
 	hr = m_pGraph->lpVtbl->QueryInterface(m_pGraph, &IID_IMediaEventEx, (void**)(&m_pEvent));
 	if (FAILED(hr))
 		goto done;
@@ -452,5 +461,10 @@ static void TearDownGraph()
 	{
 		m_pEvent->lpVtbl->Release(m_pEvent);
 		m_pEvent = NULL;
+	}
+	if (m_pAudio)
+	{
+		m_pAudio->lpVtbl->Release(m_pAudio);
+		m_pAudio = NULL;
 	}
 }

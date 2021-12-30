@@ -82,6 +82,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		break;
+	case WM_POWERBROADCAST:
+		if (wParam == PBT_POWERSETTINGCHANGE &&
+			strcmp(&((PPOWERBROADCAST_SETTING)lParam)->PowerSetting, &GUID_ACDC_POWER_SOURCE) == 0
+			)
+		{
+			if (((SYSTEM_POWER_CONDITION) * ((PPOWERBROADCAST_SETTING)lParam)->Data) == PoAc)
+			{
+
+			}
+			if (((SYSTEM_POWER_CONDITION) * ((PPOWERBROADCAST_SETTING)lParam)->Data) == PoDc)
+			{
+
+			}
+		}
+
+		break;
 	}
 
 	return DefWindowProc(hwnd, message, wParam, lParam);
@@ -89,10 +105,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdShow)
 {
+	//GetSystemPowerStatus()
+
 	static TCHAR szAppName[] = TEXT("wallpaper");
 	HWND hwnd;
 	MSG msg;
 	WNDCLASS wnd_class;
+	HPOWERNOTIFY notify;
 
 	init_player();
 
@@ -121,6 +140,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
 	UpdateWindow(hwnd);
 	ShowCursor(FALSE);
 
+	notify = RegisterPowerSettingNotification(hwnd, &GUID_ACDC_POWER_SOURCE, DEVICE_NOTIFY_WINDOW_HANDLE);
+
 	while (GetMessage(&msg, NULL, 0, 0))
 	{
 		TranslateMessage(&msg);
@@ -130,6 +151,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
 	ShowCursor(TRUE); //显示鼠标光标 
 
 	uninit_player();
-
+	UnregisterPowerSettingNotification(notify);
 	return msg.wParam;
 }

@@ -18,6 +18,7 @@ HRESULT update_video_window(HWND hwnd, const LPRECT prc);
 HRESULT repaint(HWND hwnd, HDC hdc);
 HRESULT DisplayModeChanged();
 HRESULT play();
+HRESULT set_volume(long volume);
 HRESULT pause();
 HRESULT stop();
 HRESULT HandleGraphEvent(GraphEventFN pfnOnGraphEvent, HWND hwnd);
