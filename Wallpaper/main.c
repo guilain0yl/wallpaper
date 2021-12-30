@@ -93,7 +93,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 			if (((SYSTEM_POWER_CONDITION) * ((PPOWERBROADCAST_SETTING)lParam)->Data) == PoDc)
 			{
-
+				PostQuitMessage(0);
 			}
 		}
 
@@ -105,7 +105,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdShow)
 {
-	//GetSystemPowerStatus()
+	char path[1024];
+	memset(path, 0x0, 1024);
+	SystemParametersInfo(SPI_GETDESKWALLPAPER, 1024, path, NULL);
 
 	static TCHAR szAppName[] = TEXT("wallpaper");
 	HWND hwnd;
@@ -152,5 +154,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
 
 	uninit_player();
 	UnregisterPowerSettingNotification(notify);
+
+	BOOL v = SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, path, NULL);
 	return msg.wParam;
 }
