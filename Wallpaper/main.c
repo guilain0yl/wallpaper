@@ -16,6 +16,7 @@ typedef enum wallpaper_state_enum {
 } wallpaper_state_e;
 
 static TCHAR szAppName[] = TEXT("wallpaper");
+static LPCWSTR video_path = NULL;
 static HWND worker_w = NULL;
 static UINT WM_TASKBARCREATED = 0x0;
 static HMENU h_menu;
@@ -68,11 +69,17 @@ static void OnPaint(HWND hwnd)
 	repaint(hwnd, hdc);
 
 	EndPaint(hwnd, &ps);
+
+	
 }
 
 static void OnSize(HWND hwnd)
 {
 	RECT rc;
+
+	open_video(hwnd, video_path);
+	play();
+
 	GetClientRect(hwnd, &rc);
 	update_video_window(hwnd, &rc);
 }
@@ -93,17 +100,20 @@ static void init_menu(HINSTANCE hInstance, HWND hwnd)
 
 	h_menu = CreatePopupMenu();
 
-	/*AppendMenuW(
-		_In_ HMENU hMenu,
-		_In_ UINT uFlags,
-		_In_ UINT_PTR uIDNewItem,
-		_In_opt_ LPCWSTR lpNewItem);*/
 	AppendMenu(h_menu, MF_STRING, IDR_PLAY_PAUSE, L"暂停");
 	AppendMenu(h_menu, MF_STRING, IDR_AUDIO, L"静音");
 	AppendMenu(h_menu, MF_STRING, IDR_SWITCH, L"切换视频文件");
 	AppendMenu(h_menu, MF_STRING, IDR_START_STOP, L"使用原始壁纸");
 	AppendMenu(h_menu, MF_STRING, IDR_AUTORESTART, L"开机自启");
 	AppendMenu(h_menu, MF_STRING, IDR_QUIT, L"退出");
+}
+
+static void restore_wallpaper()
+{
+	char path[1024];
+	memset(path, 0x0, 1024);
+	SystemParametersInfo(SPI_GETDESKWALLPAPER, 1024, path, NULL);
+	SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, path, NULL);
 }
 
 static void show_menu(HWND hwnd)
@@ -139,7 +149,18 @@ static void show_menu(HWND hwnd)
 		break;
 	case IDR_START_STOP:
 		wallpaper = wallpaper == wallpaper_state ? system_state : wallpaper_state;
-		ModifyMenu(h_menu, IDR_START_STOP, MF_STRING, IDR_START_STOP, video_state == wallpaper_state ? L"使用原始壁纸" : L"使用动态壁纸");
+		ModifyMenu(h_menu, IDR_START_STOP, MF_STRING, IDR_START_STOP, wallpaper == wallpaper_state ? L"使用原始壁纸" : L"使用动态壁纸");
+		if (wallpaper == wallpaper_state)
+		{
+			open_video(hwnd, video_path);
+			ShowWindow(hwnd, SW_SHOWMAXIMIZED);
+		}
+		else
+		{
+			stop();
+			ShowWindow(hwnd, SW_HIDE);
+			restore_wallpaper();
+		}
 		break;
 	case IDR_AUTORESTART:
 		// 开机自启
@@ -162,7 +183,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_CREATE:
 		InitAllArgs(hwnd);
 		init_menu(((LPCREATESTRUCTW)lParam)->hInstance, hwnd);
-		open_video(hwnd, L"D:\\ffmpeg4.4\\bin\\2.avi");
 		break;
 	case WM_USER:
 		if (lParam == WM_RBUTTONDOWN)
@@ -175,7 +195,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 		return 1;
 	case WM_PAINT:
 		OnPaint(hwnd);
-		play();
 		return 0;
 	case WM_SIZE:
 		OnSize(hwnd);
@@ -217,8 +236,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdShow)
 {
-	char path[1024];
-
 	HWND hwnd;
 	MSG msg;
 	WNDCLASS wnd_class;
@@ -226,6 +243,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
 
 	init_player();
 
+	video_path = L"D:\\ffmpeg4.4\\bin\\2.avi";
 	// 崩溃重启消息
 	WM_TASKBARCREATED = RegisterWindowMessage(TEXT("TaskbarCreated"));
 
@@ -267,9 +285,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
 	uninit_player();
 	UnregisterPowerSettingNotification(notify);
 
-	memset(path, 0x0, 1024);
-	SystemParametersInfo(SPI_GETDESKWALLPAPER, 1024, path, NULL);
-	SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, path, NULL);
+	restore_wallpaper();
 
 	return msg.wParam;
 }
