@@ -2,17 +2,26 @@
 #include "resource1.h"
 
 #define IDR_QUIT 0x1
-#define IDR_PLAY 0x2
-#define IDR_PAUSE 0x4
-#define IDR_STOP 0x8
+#define IDR_PLAY_PAUSE 0x4
+#define IDR_START_STOP 0x8
 #define IDR_SWITCH 0x16
 #define IDR_AUDIO 0x32
 #define IDR_AUTORESTART 0x64
+
+typedef enum video_state_enum {
+	play_state, pause_state
+} video_state_e;
+typedef enum wallpaper_state_enum {
+	wallpaper_state, system_state
+} wallpaper_state_e;
 
 static TCHAR szAppName[] = TEXT("wallpaper");
 static HWND worker_w = NULL;
 static UINT WM_TASKBARCREATED = 0x0;
 static HMENU h_menu;
+static video_state_e video_state = play_state;
+static wallpaper_state_e wallpaper = wallpaper_state;
+static BOOL bAudio = TRUE;
 
 static BOOL CALLBACK EnumWindowsProCallback(HWND hwnd, LPARAM lParam)
 {
@@ -83,13 +92,67 @@ static void init_menu(HINSTANCE hInstance, HWND hwnd)
 	Shell_NotifyIcon(NIM_ADD, &notify_icon_data);
 
 	h_menu = CreatePopupMenu();
-	AppendMenu(h_menu, MF_STRING, IDR_PLAY, L"开始播放");
-	AppendMenu(h_menu, MF_STRING, IDR_PAUSE, L"暂停播放");
-	AppendMenu(h_menu, MF_STRING, IDR_STOP, L"停止播放");
+
+	/*AppendMenuW(
+		_In_ HMENU hMenu,
+		_In_ UINT uFlags,
+		_In_ UINT_PTR uIDNewItem,
+		_In_opt_ LPCWSTR lpNewItem);*/
+	AppendMenu(h_menu, MF_STRING, IDR_PLAY_PAUSE, L"暂停");
 	AppendMenu(h_menu, MF_STRING, IDR_AUDIO, L"静音");
 	AppendMenu(h_menu, MF_STRING, IDR_SWITCH, L"切换视频文件");
+	AppendMenu(h_menu, MF_STRING, IDR_START_STOP, L"使用原始壁纸");
 	AppendMenu(h_menu, MF_STRING, IDR_AUTORESTART, L"开机自启");
 	AppendMenu(h_menu, MF_STRING, IDR_QUIT, L"退出");
+}
+
+static void show_menu(HWND hwnd)
+{
+	POINT pt;
+	BOOL SubItem;
+
+	ShowCursor(TRUE);
+
+	GetCursorPos(&pt);
+	SetForegroundWindow(hwnd);
+
+	SubItem = TrackPopupMenu(h_menu, TPM_RETURNCMD, pt.x, pt.y, NULL, hwnd, NULL);
+
+
+	switch (SubItem)
+	{
+	case IDR_QUIT:
+		DestroyWindow(hwnd);
+		break;
+	case IDR_PLAY_PAUSE:
+		video_state = video_state == play_state ? pause_state : play_state;
+		ModifyMenu(h_menu, IDR_PLAY_PAUSE, MF_STRING, IDR_PLAY_PAUSE, video_state == play_state ? L"暂停" : L"播放");
+		if (video_state == play_state)
+			play();
+		else
+			pause();
+		break;
+	case IDR_AUDIO:
+		bAudio = !bAudio;
+		CheckMenuItem(h_menu, IDR_AUDIO, bAudio ? MF_UNCHECKED : MF_CHECKED);
+		set_volume(bAudio ? 0 : -10000);
+		break;
+	case IDR_START_STOP:
+		wallpaper = wallpaper == wallpaper_state ? system_state : wallpaper_state;
+		ModifyMenu(h_menu, IDR_START_STOP, MF_STRING, IDR_START_STOP, video_state == wallpaper_state ? L"使用原始壁纸" : L"使用动态壁纸");
+		break;
+	case IDR_AUTORESTART:
+		// 开机自启
+		break;
+	case IDR_SWITCH:
+		// 切换视频文件
+		break;
+	}
+
+	if (SubItem == 0)
+		PostMessage(hwnd, WM_LBUTTONDOWN, NULL, NULL);
+
+	ShowCursor(FALSE);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -103,18 +166,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 		break;
 	case WM_USER:
 		if (lParam == WM_RBUTTONDOWN)
-		{
-			ShowCursor(TRUE);
-			POINT pt;
-			GetCursorPos(&pt);
-			SetForegroundWindow(hwnd);
-			BOOL xx = TrackPopupMenu(h_menu, TPM_RETURNCMD, pt.x, pt.y, NULL, hwnd, NULL);
-			if (xx == IDR_QUIT)
-				PostQuitMessage(0);
-			if (xx == 0)
-				PostMessage(hwnd, WM_LBUTTONDOWN, NULL, NULL);
-			ShowCursor(FALSE);
-		}
+			show_menu(hwnd);
 		break;
 	case WM_DISPLAYCHANGE:
 		DisplayModeChanged();
