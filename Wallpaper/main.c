@@ -70,14 +70,13 @@ static void OnPaint(HWND hwnd)
 
 	EndPaint(hwnd, &ps);
 
-	
+
 }
 
 static void OnSize(HWND hwnd)
 {
 	RECT rc;
 
-	open_video(hwnd, video_path);
 	play();
 
 	GetClientRect(hwnd, &rc);
@@ -183,6 +182,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_CREATE:
 		InitAllArgs(hwnd);
 		init_menu(((LPCREATESTRUCTW)lParam)->hInstance, hwnd);
+		open_video(hwnd, video_path);
 		break;
 	case WM_USER:
 		if (lParam == WM_RBUTTONDOWN)
@@ -243,7 +243,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
 
 	init_player();
 
-	video_path = L"D:\\ffmpeg4.4\\bin\\2.avi";
+	video_path = L"D:\\ffmpeg4.4\\bin\\5.avi";
 	// ±¿¿£÷ÿ∆Ùœ˚œ¢
 	WM_TASKBARCREATED = RegisterWindowMessage(TEXT("TaskbarCreated"));
 

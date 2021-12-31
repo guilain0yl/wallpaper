@@ -2,6 +2,7 @@
 
 static IGraphBuilder* m_pGraph;
 static IMediaControl* m_pControl;
+static IMediaPosition* m_pPosition;
 static IMediaEventEx* m_pEvent;
 static IVMRWindowlessControl9* m_pWindowless;
 static IBasicAudio* m_pAudio;
@@ -93,6 +94,7 @@ HRESULT pause()
 
 HRESULT stop()
 {
+	m_pPosition->lpVtbl->put_CurrentPosition(m_pPosition, 0);
 	return m_pControl->lpVtbl->Stop(m_pControl);
 }
 
@@ -117,11 +119,19 @@ HRESULT HandleGraphEvent(GraphEventFN pfnOnGraphEvent, HWND hwnd)
 	return hr;
 }
 
+HRESULT DisplayModeChanged()
+{
+	return m_pWindowless ? m_pWindowless->lpVtbl->DisplayModeChanged(m_pWindowless) : S_OK;
+}
+
 void CALLBACK OnGraphEvent(HWND hwnd, long evCode, LONG_PTR param1, LONG_PTR param2)
 {
 	switch (evCode)
 	{
 	case EC_COMPLETE:
+		stop();
+		play();
+		break;
 	case EC_USERABORT:
 		stop();
 		break;
@@ -129,11 +139,6 @@ void CALLBACK OnGraphEvent(HWND hwnd, long evCode, LONG_PTR param1, LONG_PTR par
 		stop();
 		break;
 	}
-}
-
-HRESULT DisplayModeChanged()
-{
-	return m_pWindowless ? m_pWindowless->lpVtbl->DisplayModeChanged(m_pWindowless) : S_OK;
 }
 
 static HRESULT RemoveUnconnectedRenderer(IGraphBuilder* pGraph, IBaseFilter* pRenderer, BOOL* pbRemoved)
@@ -425,6 +430,10 @@ static HRESULT InitializeGraph(HWND hwnd)
 	if (FAILED(hr))
 		goto done;
 
+	hr = m_pGraph->lpVtbl->QueryInterface(m_pGraph, &IID_IMediaPosition, (void**)&m_pPosition);
+	if (FAILED(hr))
+		goto done;
+
 	hr = m_pGraph->lpVtbl->QueryInterface(m_pGraph, &IID_IBasicAudio, (void**)&m_pAudio);
 	if (FAILED(hr))
 		goto done;
@@ -456,6 +465,11 @@ static void TearDownGraph()
 	{
 		m_pControl->lpVtbl->Release(m_pControl);
 		m_pControl = NULL;
+	}
+	if (m_pPosition)
+	{
+		m_pPosition->lpVtbl->Release(m_pPosition);
+		m_pPosition = NULL;
 	}
 	if (m_pEvent)
 	{
