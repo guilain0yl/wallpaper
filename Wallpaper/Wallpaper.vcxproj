@@ -140,10 +140,17 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="player.h" />
+    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.c" />
     <ClCompile Include="player.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Wallpaper.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="icon\32x32.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
