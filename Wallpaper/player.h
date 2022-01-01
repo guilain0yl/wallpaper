@@ -9,6 +9,7 @@
 #pragma comment (lib,"Strmiids.lib")
 
 #define WM_GRAPH_EVENT (WM_APP+1)
+#define WM_FULLSCREEN (WM_APP+2)
 
 typedef void (CALLBACK* GraphEventFN)(HWND hwnd, long eventCode, LONG_PTR param1, LONG_PTR param2);
 

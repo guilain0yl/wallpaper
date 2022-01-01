@@ -1,7 +1,8 @@
 #include"player.h"
-#include "resource1.h"
+#include "resource.h"
 
 #define IDR_QUIT 0x1
+#define IDR_FULLSCREEN_PAUSE 0x2
 #define IDR_PLAY_PAUSE 0x4
 #define IDR_START_STOP 0x8
 #define IDR_SWITCH 0x16
@@ -24,6 +25,7 @@ static video_state_e video_state = play_state;
 static wallpaper_state_e wallpaper = wallpaper_state;
 static BOOL bAudio = TRUE;
 static BOOL bAutoRun = FALSE;
+static BOOL bFullScreenPause = FALSE;
 
 static BOOL CALLBACK EnumWindowsProCallback(HWND hwnd, LPARAM lParam)
 {
@@ -138,9 +140,10 @@ static void init_menu(HINSTANCE hInstance, HWND hwnd)
 
 	AppendMenu(h_menu, MF_STRING, IDR_PLAY_PAUSE, L"暂停");
 	AppendMenu(h_menu, MF_STRING, IDR_AUDIO, L"静音");
-	AppendMenu(h_menu, MF_STRING, IDR_SWITCH, L"切换视频文件");
+	AppendMenu(h_menu, MF_STRING, IDR_SWITCH, L"切换视频文件 >");
 	AppendMenu(h_menu, MF_STRING, IDR_START_STOP, L"使用原始壁纸");
 	AppendMenu(h_menu, MF_STRING, IDR_AUTORESTART, L"开机自启");
+	AppendMenu(h_menu, MF_STRING, IDR_FULLSCREEN_PAUSE, L"全屏暂停");
 	AppendMenu(h_menu, MF_STRING, IDR_QUIT, L"退出");
 }
 
@@ -163,7 +166,6 @@ static void show_menu(HWND hwnd)
 	SetForegroundWindow(hwnd);
 
 	SubItem = TrackPopupMenu(h_menu, TPM_RETURNCMD, pt.x, pt.y, NULL, hwnd, NULL);
-
 
 	switch (SubItem)
 	{
@@ -208,6 +210,10 @@ static void show_menu(HWND hwnd)
 	case IDR_SWITCH:
 		// 切换视频文件
 		break;
+	case IDR_FULLSCREEN_PAUSE:
+		bFullScreenPause = !bFullScreenPause;
+		CheckMenuItem(h_menu, IDR_FULLSCREEN_PAUSE, bFullScreenPause ? MF_CHECKED : MF_UNCHECKED);
+		break;
 	}
 
 	if (SubItem == 0)
@@ -240,6 +246,15 @@ static int init_config()
 	return 0;
 }
 
+static int listen_fullscreen_msg(HWND hwnd)
+{
+	APPBARDATA abd;
+	abd.cbSize = sizeof(APPBARDATA);
+	abd.uCallbackMessage = WM_FULLSCREEN;
+	abd.hWnd = hwnd;
+	SHAppBarMessage(ABM_NEW, &abd);
+}
+
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
@@ -247,6 +262,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 	case WM_CREATE:
 		InitAllArgs(hwnd);
 		init_menu(((LPCREATESTRUCTW)lParam)->hInstance, hwnd);
+		listen_fullscreen_msg(hwnd);
 		open_video(hwnd, video_path);
 		break;
 	case WM_USER:
@@ -267,6 +283,15 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 	case WM_GRAPH_EVENT:
 		HandleGraphEvent(OnGraphEvent, hwnd);
 		return 0;
+	case WM_FULLSCREEN:
+		if (((UINT)wParam) == ABN_FULLSCREENAPP && bFullScreenPause)
+		{
+			if (TRUE == (BOOL)lParam)
+				pause();
+			else
+				play();
+		}
+		break;
 	case WM_DESTROY:
 	{
 		NOTIFYICONDATA nid;
