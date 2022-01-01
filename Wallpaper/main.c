@@ -23,6 +23,7 @@ static HMENU h_menu;
 static video_state_e video_state = play_state;
 static wallpaper_state_e wallpaper = wallpaper_state;
 static BOOL bAudio = TRUE;
+static BOOL bAutoRun = FALSE;
 
 static BOOL CALLBACK EnumWindowsProCallback(HWND hwnd, LPARAM lParam)
 {
@@ -70,17 +71,53 @@ static void OnPaint(HWND hwnd)
 
 	EndPaint(hwnd, &ps);
 
-
+	play();
 }
 
 static void OnSize(HWND hwnd)
 {
 	RECT rc;
 
-	play();
-
 	GetClientRect(hwnd, &rc);
 	update_video_window(hwnd, &rc);
+
+
+}
+
+static int set_auto_run()
+{
+	WCHAR path_buffer[MAX_PATH];
+	HKEY hKey;
+	int result = -1;
+
+	if (GetModuleFileName(NULL, path_buffer, MAX_PATH) <= 0)
+		return result;
+
+	LSTATUS res = RegOpenKeyEx(HKEY_CURRENT_USER, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_ALL_ACCESS | KEY_SET_VALUE | KEY_WOW64_64KEY, &hKey);
+	if (res == ERROR_SUCCESS)
+	{
+		if (RegSetValueEx(hKey, L"Wallpaper", 0, REG_SZ, path_buffer, (lstrlen(path_buffer) + 1) * sizeof(TCHAR)) == ERROR_SUCCESS)
+			result = 0;
+	}
+
+	RegCloseKey(hKey);
+	return result;
+}
+
+static int unset_auto_run()
+{
+	HKEY hKey;
+	int result = -1;
+
+	LSTATUS res = RegOpenKeyEx(HKEY_CURRENT_USER, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_ALL_ACCESS | KEY_WOW64_64KEY, &hKey);
+	if (res == ERROR_SUCCESS)
+	{
+		if (RegDeleteValue(hKey, L"Wallpaper") == ERROR_SUCCESS)
+			result = 0;
+	}
+
+	RegCloseKey(hKey);
+	return result;
 }
 
 static void init_menu(HINSTANCE hInstance, HWND hwnd)
@@ -162,8 +199,12 @@ static void show_menu(HWND hwnd)
 		}
 		break;
 	case IDR_AUTORESTART:
-		// 开机自启
-		break;
+	{
+		bAutoRun = !bAutoRun;
+		if ((bAutoRun ? set_auto_run() : unset_auto_run()) >= 0)
+			CheckMenuItem(h_menu, IDR_AUTORESTART, bAutoRun ? MF_CHECKED : MF_UNCHECKED);
+	}
+	break;
 	case IDR_SWITCH:
 		// 切换视频文件
 		break;
@@ -175,7 +216,31 @@ static void show_menu(HWND hwnd)
 	ShowCursor(FALSE);
 }
 
-LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+static int init_config()
+{
+	WIN32_FIND_DATA  wfd;
+	WCHAR path_buffer[MAX_PATH];
+
+	if (GetCurrentDirectory(MAX_PATH, path_buffer) <= 0)
+		return -1;
+
+	if (lstrcat(path_buffer, L"\\cache") == NULL)
+		return -1;
+
+	HANDLE hFind = FindFirstFile(path_buffer, &wfd);
+	if ((hFind != INVALID_HANDLE_VALUE) && (wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+	{
+		FindClose(hFind);
+		return 0;
+	}
+
+	if (CreateDirectory(path_buffer, NULL) == NULL)
+		return -1;
+
+	return 0;
+}
+
+static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
 	{
@@ -241,8 +306,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
 	WNDCLASS wnd_class;
 	HPOWERNOTIFY notify;
 
-	init_player();
+	if (init_config() < 0 || init_player() < 0)
+	{
+		MessageBox(NULL, TEXT("程序加载失败!"), szAppName, MB_ICONERROR);
+		return 0;
+	}
 
+	// ffmpeg -i input.mp4 -c:v libx264 -c:a libmp3lame -b:a 384K output.avi
 	video_path = L"D:\\ffmpeg4.4\\bin\\5.avi";
 	// 崩溃重启消息
 	WM_TASKBARCREATED = RegisterWindowMessage(TEXT("TaskbarCreated"));
@@ -274,6 +344,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
 
 	notify = RegisterPowerSettingNotification(hwnd, &GUID_ACDC_POWER_SOURCE, DEVICE_NOTIFY_WINDOW_HANDLE);
 
+	//RedrawWindow(hwnd,NULL)
 	while (GetMessage(&msg, NULL, 0, 0))
 	{
 		TranslateMessage(&msg);
