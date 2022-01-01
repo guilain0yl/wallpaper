@@ -140,7 +140,9 @@ static void init_menu(HINSTANCE hInstance, HWND hwnd)
 
 	AppendMenu(h_menu, MF_STRING, IDR_PLAY_PAUSE, L"暂停");
 	AppendMenu(h_menu, MF_STRING, IDR_AUDIO, L"静音");
-	AppendMenu(h_menu, MF_STRING, IDR_SWITCH, L"切换视频文件 >");
+	HMENU sub_menu = CreatePopupMenu();
+	AppendMenu(sub_menu, MF_STRING, IDR_SWITCH, L"选择视频文件");
+	AppendMenu(h_menu, MF_POPUP, sub_menu, L"切换视频文件");
 	AppendMenu(h_menu, MF_STRING, IDR_START_STOP, L"使用原始壁纸");
 	AppendMenu(h_menu, MF_STRING, IDR_AUTORESTART, L"开机自启");
 	AppendMenu(h_menu, MF_STRING, IDR_FULLSCREEN_PAUSE, L"全屏暂停");
