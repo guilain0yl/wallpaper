@@ -79,21 +79,33 @@ HRESULT repaint(HWND hwnd, HDC hdc)
 
 HRESULT play()
 {
+	if (m_pControl == NULL)
+		return;
+
 	return m_pControl->lpVtbl->Run(m_pControl);
 }
 
 HRESULT set_volume(long volume)
 {
+	if (m_pAudio == NULL)
+		return;
+
 	return m_pAudio->lpVtbl->put_Volume(m_pAudio, volume);
 }
 
 HRESULT pause()
 {
+	if (m_pControl == NULL)
+		return;
+
 	return m_pControl->lpVtbl->Pause(m_pControl);
 }
 
 HRESULT stop()
 {
+	if (m_pPosition == NULL || m_pControl == NULL)
+		return;
+
 	m_pPosition->lpVtbl->put_CurrentPosition(m_pPosition, 0);
 	return m_pControl->lpVtbl->Stop(m_pControl);
 }

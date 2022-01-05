@@ -5,8 +5,10 @@
 #include <d3d9.h>
 #include <dshow.h>
 #include <Vmr9.h>
+#include <shlwapi.h>
 
 #pragma comment (lib,"Strmiids.lib")
+#pragma comment(lib,"Shlwapi.lib")
 
 #define WM_GRAPH_EVENT (WM_APP+1)
 #define WM_FULLSCREEN (WM_APP+2)

@@ -8,6 +8,7 @@
 #define IDR_SWITCH 0x16
 #define IDR_AUDIO 0x32
 #define IDR_AUTORESTART 0x64
+#define IDR_FILESTART 0x100
 
 typedef enum video_state_enum {
 	play_state, pause_state
@@ -17,7 +18,6 @@ typedef enum wallpaper_state_enum {
 } wallpaper_state_e;
 
 static TCHAR szAppName[] = TEXT("wallpaper");
-static LPCWSTR video_path = NULL;
 static HWND worker_w = NULL;
 static UINT WM_TASKBARCREATED = 0x0;
 static HMENU h_menu;
@@ -26,6 +26,8 @@ static wallpaper_state_e wallpaper = wallpaper_state;
 static BOOL bAudio = TRUE;
 static BOOL bAutoRun = FALSE;
 static BOOL bFullScreenPause = FALSE;
+static WCHAR file_name[MAX_PATH];
+static WCHAR current_path[MAX_PATH];
 
 static BOOL CALLBACK EnumWindowsProCallback(HWND hwnd, LPARAM lParam)
 {
@@ -72,8 +74,6 @@ static void OnPaint(HWND hwnd)
 	repaint(hwnd, hdc);
 
 	EndPaint(hwnd, &ps);
-
-	play();
 }
 
 static void OnSize(HWND hwnd)
@@ -82,8 +82,58 @@ static void OnSize(HWND hwnd)
 
 	GetClientRect(hwnd, &rc);
 	update_video_window(hwnd, &rc);
+}
 
+static void enum_all_avi_videos(HMENU sub_menu)
+{
+	WIN32_FIND_DATAW wfd;
+	WCHAR path_buffer[MAX_PATH];
+	int item_count = 0;
+	int i = 0;
+	int index = IDR_FILESTART;
 
+	if (!sub_menu)
+		return;
+
+	item_count = GetMenuItemCount(sub_menu);
+
+	if (item_count > 0)
+	{
+		for (i = 0; i < item_count; i++)
+			DeleteMenu(sub_menu, 0, MF_BYPOSITION);
+	}
+
+	item_count = GetMenuItemCount(sub_menu);
+
+	if (!lstrcpy(path_buffer, current_path))
+		return -1;
+
+	if (lstrcat(path_buffer, L"\\cache\\*.*") == NULL)
+		return -1;
+
+	HANDLE hFile = FindFirstFile(path_buffer, &wfd);
+	while (hFile != INVALID_HANDLE_VALUE)
+	{
+		if (!(wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+		{
+			LPWSTR extStr = PathFindExtension(wfd.cFileName);
+
+			if (extStr && 0 == _wcsicmp(extStr, L".avi"))
+			{
+				AppendMenu(sub_menu, MF_STRING, index++, wfd.cFileName);
+				if (_wcsicmp(wfd.cFileName, file_name) == 0)
+					CheckMenuItem(sub_menu, index - 1, MF_CHECKED);
+			}
+		}
+
+		if (!FindNextFile(hFile, &wfd))
+			break;
+	}
+
+	item_count = GetMenuItemCount(sub_menu);
+	if (item_count > 0)
+		AppendMenu(sub_menu, MF_SEPARATOR, index, NULL);
+	AppendMenu(sub_menu, MF_STRING, IDR_SWITCH, L"选择视频文件");
 }
 
 static int set_auto_run()
@@ -141,7 +191,6 @@ static void init_menu(HINSTANCE hInstance, HWND hwnd)
 	AppendMenu(h_menu, MF_STRING, IDR_PLAY_PAUSE, L"暂停");
 	AppendMenu(h_menu, MF_STRING, IDR_AUDIO, L"静音");
 	HMENU sub_menu = CreatePopupMenu();
-	AppendMenu(sub_menu, MF_STRING, IDR_SWITCH, L"选择视频文件");
 	AppendMenu(h_menu, MF_POPUP, sub_menu, L"切换视频文件");
 	AppendMenu(h_menu, MF_STRING, IDR_START_STOP, L"使用原始壁纸");
 	AppendMenu(h_menu, MF_STRING, IDR_AUTORESTART, L"开机自启");
@@ -157,6 +206,52 @@ static void restore_wallpaper()
 	SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, path, NULL);
 }
 
+static void play_video(HWND hwnd)
+{
+	WCHAR path_buffer[MAX_PATH];
+
+	memset(path_buffer, 0x0, MAX_PATH * sizeof(WCHAR));
+
+	if (lstrcpy(path_buffer, current_path) &&
+		lstrcat(path_buffer, L"\\cache\\") &&
+		lstrcat(path_buffer, file_name))
+	{
+		stop();
+		ShowWindow(hwnd, SW_HIDE);
+		open_video(hwnd, path_buffer);
+		ShowWindow(hwnd, SW_SHOWMAXIMIZED);
+		play();
+	}
+}
+
+static void OnFileOpen(HWND hwnd)
+{
+	OPENFILENAME ofn;
+	ZeroMemory(&ofn, sizeof(ofn));
+	WCHAR path_buffer[MAX_PATH];
+	memset(path_buffer, 0x0, MAX_PATH * sizeof(WCHAR));
+
+	WCHAR szFileName[MAX_PATH];
+	szFileName[0] = L'\0';
+
+	ofn.lStructSize = sizeof(ofn);
+	ofn.hwndOwner = hwnd;
+	ofn.hInstance = GetModuleHandle(NULL);
+	ofn.lpstrFilter = L"AVI Files(*.avi)";
+	ofn.lpstrFile = szFileName;
+	ofn.nMaxFile = MAX_PATH;
+	ofn.Flags = OFN_FILEMUSTEXIST;
+
+	if (GetOpenFileName(&ofn))
+	{
+		LPWSTR m_file_name = PathFindFileName(szFileName);
+		if (lstrcpy(path_buffer, current_path) &&
+			lstrcat(path_buffer, L"\\cache\\")
+			&& lstrcat(path_buffer, m_file_name))
+			MoveFile(szFileName, path_buffer);
+	}
+}
+
 static void show_menu(HWND hwnd)
 {
 	POINT pt;
@@ -166,7 +261,8 @@ static void show_menu(HWND hwnd)
 
 	GetCursorPos(&pt);
 	SetForegroundWindow(hwnd);
-
+	HMENU sub_menu = GetSubMenu(h_menu, 2);
+	enum_all_avi_videos(sub_menu);
 	SubItem = TrackPopupMenu(h_menu, TPM_RETURNCMD, pt.x, pt.y, NULL, hwnd, NULL);
 
 	switch (SubItem)
@@ -192,8 +288,7 @@ static void show_menu(HWND hwnd)
 		ModifyMenu(h_menu, IDR_START_STOP, MF_STRING, IDR_START_STOP, wallpaper == wallpaper_state ? L"使用原始壁纸" : L"使用动态壁纸");
 		if (wallpaper == wallpaper_state)
 		{
-			open_video(hwnd, video_path);
-			ShowWindow(hwnd, SW_SHOWMAXIMIZED);
+			play_video(hwnd);
 		}
 		else
 		{
@@ -211,17 +306,29 @@ static void show_menu(HWND hwnd)
 	break;
 	case IDR_SWITCH:
 		// 切换视频文件
+		OnFileOpen(hwnd);
 		break;
 	case IDR_FULLSCREEN_PAUSE:
 		bFullScreenPause = !bFullScreenPause;
 		CheckMenuItem(h_menu, IDR_FULLSCREEN_PAUSE, bFullScreenPause ? MF_CHECKED : MF_UNCHECKED);
 		break;
+	default:
+		if (SubItem >= IDR_FILESTART)
+		{
+			memset(file_name, 0x0, MAX_PATH * sizeof(WCHAR));
+
+			GetMenuString(sub_menu, SubItem, file_name, MAX_PATH, MF_BYCOMMAND);
+			CheckMenuItem(sub_menu, SubItem, MF_CHECKED);
+
+			play_video(hwnd);
+		}
 	}
 
 	if (SubItem == 0)
 		PostMessage(hwnd, WM_LBUTTONDOWN, NULL, NULL);
 
 	ShowCursor(FALSE);
+	DrawMenuBar(hwnd);
 }
 
 static int init_config()
@@ -229,8 +336,13 @@ static int init_config()
 	WIN32_FIND_DATA  wfd;
 	WCHAR path_buffer[MAX_PATH];
 
-	if (GetCurrentDirectory(MAX_PATH, path_buffer) <= 0)
+	if (GetModuleFileName(NULL, current_path, MAX_PATH) <= 0)
 		return -1;
+
+	if (!PathRemoveFileSpec(current_path))
+		return -1;
+
+	lstrcpy(path_buffer, current_path);
 
 	if (lstrcat(path_buffer, L"\\cache") == NULL)
 		return -1;
@@ -265,7 +377,6 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 		InitAllArgs(hwnd);
 		init_menu(((LPCREATESTRUCTW)lParam)->hInstance, hwnd);
 		listen_fullscreen_msg(hwnd);
-		open_video(hwnd, video_path);
 		break;
 	case WM_USER:
 		if (lParam == WM_RBUTTONDOWN)
@@ -304,15 +415,18 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 	case WM_POWERBROADCAST:
 		if (wParam == PBT_POWERSETTINGCHANGE &&
 			strcmp(&((PPOWERBROADCAST_SETTING)lParam)->PowerSetting, &GUID_ACDC_POWER_SOURCE) == 0
-			)
+			&& wallpaper == wallpaper_state
+			&& file_name[0] != 0x0)
 		{
 			if (((SYSTEM_POWER_CONDITION) * ((PPOWERBROADCAST_SETTING)lParam)->Data) == PoAc)
 			{
-
+				play_video(hwnd);
 			}
 			if (((SYSTEM_POWER_CONDITION) * ((PPOWERBROADCAST_SETTING)lParam)->Data) == PoDc)
 			{
-				PostQuitMessage(0);
+				stop();
+				ShowWindow(hwnd, SW_HIDE);
+				restore_wallpaper();
 			}
 		}
 		break;
@@ -340,7 +454,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
 	}
 
 	// ffmpeg -i input.mp4 -c:v libx264 -c:a libmp3lame -b:a 384K output.avi
-	video_path = L"D:\\ffmpeg4.4\\bin\\5.avi";
 	// 崩溃重启消息
 	WM_TASKBARCREATED = RegisterWindowMessage(TEXT("TaskbarCreated"));
 
