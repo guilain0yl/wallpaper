@@ -278,6 +278,7 @@ static void OnFileOpen(HWND hwnd)
 
 static void save_config_file()
 {
+	WCHAR path_buffer[MAX_PATH];
 	WCHAR config[MAX_PATH * 2];
 	DWORD len = 0;
 	ZeroMemory(config, sizeof(config));
@@ -286,7 +287,9 @@ static void save_config_file()
 	lstrcat(config, bFullScreenPause ? L"1," : L"0,");
 	lstrcat(config, file_name[0] == 0x0 ? L"NULL" : file_name);
 
-	HANDLE hFile = CreateFile(L"config.cfg", GENERIC_WRITE, FILE_SHARE_READ,
+	lstrcpy(path_buffer, current_path);
+	lstrcat(path_buffer, L"\\config.cfg");
+	HANDLE hFile = CreateFile(path_buffer, GENERIC_WRITE, FILE_SHARE_READ,
 		NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
 	if (hFile == INVALID_HANDLE_VALUE)
@@ -315,6 +318,9 @@ static void show_menu(HWND hwnd)
 	switch (SubItem)
 	{
 	case IDR_QUIT:
+		stop();
+		ShowWindow(hwnd, SW_HIDE);
+		restore_wallpaper();
 		DestroyWindow(hwnd);
 		break;
 	case IDR_PLAY_PAUSE:
@@ -410,7 +416,9 @@ static int init_config()
 			return -1;
 	}
 
-	HANDLE hFile = CreateFile(L"config.cfg", GENERIC_READ, FILE_SHARE_READ,
+	lstrcpy(path_buffer, current_path);
+	lstrcat(path_buffer, L"\\config.cfg");
+	HANDLE hFile = CreateFile(path_buffer, GENERIC_READ, FILE_SHARE_READ,
 		NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hFile != INVALID_HANDLE_VALUE &&
 		ReadFile(hFile, config, MAX_PATH * 2, &len, NULL))
@@ -424,8 +432,6 @@ static int init_config()
 				lstrcpy(file_name, &config[6]);
 		}
 	}
-
-
 
 	bAutoRun = auto_run_state() == 0;
 
