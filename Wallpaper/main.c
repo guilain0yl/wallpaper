@@ -172,6 +172,23 @@ static int unset_auto_run()
 	return result;
 }
 
+static int auto_run_state()
+{
+	HKEY hKey;
+	int result = -1;
+	DWORD dwType = REG_SZ;
+
+	LSTATUS res = RegOpenKeyEx(HKEY_CURRENT_USER, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_ALL_ACCESS | KEY_WOW64_64KEY, &hKey);
+	if (res == ERROR_SUCCESS)
+	{
+		if (RegQueryValueEx(hKey, L"Wallpaper", NULL, &dwType, NULL, NULL) == ERROR_SUCCESS)
+			result = 0;
+	}
+
+	RegCloseKey(hKey);
+	return result;
+}
+
 static void init_menu(HINSTANCE hInstance, HWND hwnd)
 {
 	NOTIFYICONDATA notify_icon_data;
@@ -190,11 +207,17 @@ static void init_menu(HINSTANCE hInstance, HWND hwnd)
 
 	AppendMenu(h_menu, MF_STRING, IDR_PLAY_PAUSE, L"暂停");
 	AppendMenu(h_menu, MF_STRING, IDR_AUDIO, L"静音");
+	if (!bAudio)
+		CheckMenuItem(h_menu, IDR_AUDIO, MF_CHECKED);
 	HMENU sub_menu = CreatePopupMenu();
 	AppendMenu(h_menu, MF_POPUP, sub_menu, L"切换视频文件");
-	AppendMenu(h_menu, MF_STRING, IDR_START_STOP, L"使用原始壁纸");
+	AppendMenu(h_menu, MF_STRING, IDR_START_STOP, wallpaper == wallpaper_state ? L"使用原始壁纸" : L"使用动态壁纸");
 	AppendMenu(h_menu, MF_STRING, IDR_AUTORESTART, L"开机自启");
+	if (bAutoRun)
+		CheckMenuItem(h_menu, IDR_AUTORESTART, MF_CHECKED);
 	AppendMenu(h_menu, MF_STRING, IDR_FULLSCREEN_PAUSE, L"全屏暂停");
+	if (bFullScreenPause)
+		CheckMenuItem(h_menu, IDR_FULLSCREEN_PAUSE, MF_CHECKED);
 	AppendMenu(h_menu, MF_STRING, IDR_QUIT, L"退出");
 }
 
@@ -221,6 +244,7 @@ static void play_video(HWND hwnd)
 		open_video(hwnd, path_buffer);
 		ShowWindow(hwnd, SW_SHOWMAXIMIZED);
 		play();
+		set_volume(bAudio ? 0 : -10000);
 	}
 }
 
@@ -250,6 +274,29 @@ static void OnFileOpen(HWND hwnd)
 			&& lstrcat(path_buffer, m_file_name))
 			MoveFile(szFileName, path_buffer);
 	}
+}
+
+static void save_config_file()
+{
+	WCHAR config[MAX_PATH * 2];
+	DWORD len = 0;
+	ZeroMemory(config, sizeof(config));
+	lstrcat(config, bAudio ? L"1," : L"0,");
+	lstrcat(config, wallpaper == wallpaper_state ? L"1," : L"0,");
+	lstrcat(config, bFullScreenPause ? L"1," : L"0,");
+	lstrcat(config, file_name[0] == 0x0 ? L"NULL" : file_name);
+
+	HANDLE hFile = CreateFile(L"config.cfg", GENERIC_WRITE, FILE_SHARE_READ,
+		NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+	if (hFile == INVALID_HANDLE_VALUE)
+		return;
+
+	SetFilePointer(hFile, 0, 0, FILE_BEGIN);
+	WriteFile(hFile, config, lstrlen(config) * sizeof(WCHAR), &len, NULL);
+	SetEndOfFile(hFile);
+
+	CloseHandle(hFile);
 }
 
 static void show_menu(HWND hwnd)
@@ -329,12 +376,17 @@ static void show_menu(HWND hwnd)
 
 	ShowCursor(FALSE);
 	DrawMenuBar(hwnd);
+	save_config_file();
 }
 
 static int init_config()
 {
 	WIN32_FIND_DATA  wfd;
 	WCHAR path_buffer[MAX_PATH];
+	WCHAR config[MAX_PATH * 2];
+	DWORD len = 0;
+	int i = 0;
+	ZeroMemory(config, sizeof(config));
 
 	if (GetModuleFileName(NULL, current_path, MAX_PATH) <= 0)
 		return -1;
@@ -351,12 +403,33 @@ static int init_config()
 	if ((hFind != INVALID_HANDLE_VALUE) && (wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
 	{
 		FindClose(hFind);
-		return 0;
+	}
+	else
+	{
+		if (CreateDirectory(path_buffer, NULL) == NULL)
+			return -1;
 	}
 
-	if (CreateDirectory(path_buffer, NULL) == NULL)
-		return -1;
+	HANDLE hFile = CreateFile(L"config.cfg", GENERIC_READ, FILE_SHARE_READ,
+		NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile != INVALID_HANDLE_VALUE &&
+		ReadFile(hFile, config, MAX_PATH * 2, &len, NULL))
+	{
+		if (config[0] != 0x0)
+		{
+			bAudio = config[0] == '1';
+			wallpaper = config[2] == '1' ? wallpaper_state : system_state;
+			bFullScreenPause = config[4] == '1';
+			if (lstrcmpi(&config[6], L"NULL"))
+				lstrcpy(file_name, &config[6]);
+		}
+	}
 
+
+
+	bAutoRun = auto_run_state() == 0;
+
+	CloseHandle(hFile);
 	return 0;
 }
 
