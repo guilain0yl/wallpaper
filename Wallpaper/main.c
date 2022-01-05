@@ -272,7 +272,11 @@ static void OnFileOpen(HWND hwnd)
 		if (lstrcpy(path_buffer, current_path) &&
 			lstrcat(path_buffer, L"\\cache\\")
 			&& lstrcat(path_buffer, m_file_name))
+		{
 			MoveFile(szFileName, path_buffer);
+			lstrcpy(file_name, m_file_name);
+			play_video(hwnd);
+		}
 	}
 }
 
